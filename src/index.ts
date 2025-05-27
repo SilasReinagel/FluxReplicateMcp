@@ -1,33 +1,30 @@
 #!/usr/bin/env node
 
+/**
+ * Simple Flux Replicate MCP Server
+ * Generates images using Flux models via Replicate API
+ */
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { ConfigManager } from './config.js';
-import { SetupManager } from './setup.js';
-import { ReplicateClient, type FluxModel, type AspectRatio } from './replicate-client.js';
-import { ImageProcessor, type OutputFormat, type ImageProcessingOptions } from './image-processor.js';
-import { TempManager } from './temp-manager.js';
-import { promises as fs } from 'fs';
-import { dirname, extname } from 'path';
+import { ReplicateClient } from './replicate.js';
+import { ImageProcessor } from './image.js';
+import { TempManager } from './temp.js';
+import { getConfig } from './config.js';
+import { validationError, processingError, McpError } from './errors.js';
+import { info, error } from './log.js';
 
 /**
- * Flux Replicate MCP Server
- * Provides image generation capabilities using Flux Pro and Flux Schnell models via Replicate API
+ * Simple MCP Server for Flux image generation
  */
-class FluxReplicateMcpServer {
+class FluxMcpServer {
   private server: Server;
-  private configManager: ConfigManager;
-  private setupManager: SetupManager;
-  private replicateClient: ReplicateClient | null = null;
+  private replicateClient: ReplicateClient;
   private imageProcessor: ImageProcessor;
   private tempManager: TempManager;
 
   constructor() {
-    this.configManager = ConfigManager.getInstance();
-    this.setupManager = new SetupManager();
-    this.imageProcessor = new ImageProcessor();
-    this.tempManager = new TempManager();
     this.server = new Server(
       {
         name: 'flux-replicate-mcp-server',
@@ -40,21 +37,24 @@ class FluxReplicateMcpServer {
       }
     );
 
-    this.setupToolHandlers();
-    this.setupErrorHandling();
+    this.replicateClient = new ReplicateClient();
+    this.imageProcessor = new ImageProcessor();
+    this.tempManager = new TempManager();
+
+    this.setupHandlers();
   }
 
   /**
-   * Set up tool handlers for the MCP server
+   * Set up MCP request handlers
    */
-  private setupToolHandlers(): void {
+  private setupHandlers(): void {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: [
           {
             name: 'generate_image',
-            description: 'Generate images using Flux Pro or Flux Schnell models via Replicate API',
+            description: 'Generate images using Flux Pro or Flux Schnell models',
             inputSchema: {
               type: 'object',
               properties: {
@@ -65,39 +65,25 @@ class FluxReplicateMcpServer {
                 model: {
                   type: 'string',
                   enum: ['flux-pro', 'flux-schnell'],
-                  description: 'Flux model to use for generation',
-                  default: 'flux-pro',
-                },
-                aspect_ratio: {
-                  type: 'string',
-                  enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '21:9', '9:21'],
-                  description: 'Aspect ratio for the generated image',
-                  default: '1:1',
+                  description: 'Flux model to use (default: flux-pro)',
                 },
                 output_path: {
                   type: 'string',
-                  description: 'Local file path where the generated image will be saved',
+                  description: 'Local file path where the image will be saved',
                 },
-                final_width: {
+                width: {
                   type: 'number',
-                  description: 'Target width for final image processing (optional)',
+                  description: 'Image width in pixels (default: 1024)',
                 },
-                final_height: {
+                height: {
                   type: 'number',
-                  description: 'Target height for final image processing (optional)',
-                },
-                output_format: {
-                  type: 'string',
-                  enum: ['jpg', 'png', 'webp'],
-                  description: 'Output image format',
-                  default: 'jpg',
+                  description: 'Image height in pixels (default: 1024)',
                 },
                 quality: {
                   type: 'number',
                   minimum: 1,
                   maximum: 100,
-                  description: 'Image quality for lossy formats (1-100)',
-                  default: 80,
+                  description: 'Image quality for lossy formats (default: 80)',
                 },
               },
               required: ['prompt', 'output_path'],
@@ -113,14 +99,16 @@ class FluxReplicateMcpServer {
 
       if (name === 'generate_image') {
         try {
-          return await this.handleImageGeneration(args);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          return await this.handleGenerateImage(args);
+        } catch (err) {
+          const mcpError = err instanceof McpError ? err : processingError('Unknown error occurred');
+          error('Image generation failed', { error: mcpError.message, args });
+          
           return {
             content: [
               {
                 type: 'text',
-                text: `Error generating image: ${errorMessage}`,
+                text: `Error: ${mcpError.message}`,
               },
             ],
             isError: true,
@@ -128,279 +116,92 @@ class FluxReplicateMcpServer {
         }
       }
 
-      throw new Error(`Unknown tool: ${name}`);
+      throw validationError(`Unknown tool: ${name}`);
     });
   }
 
   /**
-   * Handle image generation tool call
+   * Handle image generation request
    */
-  private async handleImageGeneration(args: any): Promise<any> {
-    if (!this.replicateClient) {
-      throw new Error('Replicate client not initialized');
-    }
-
-    // Extract and validate parameters
-    const {
-      prompt,
-      model = this.configManager.getDefaultModel(),
-      aspect_ratio = this.configManager.getDefaultAspectRatio(),
-      output_path,
-      final_width,
-      final_height,
-      output_format = this.configManager.getDefaultOutputFormat(),
-      quality = this.configManager.getDefaultQuality(),
-    } = args;
-
+  private async handleGenerateImage(args: any): Promise<any> {
     // Validate required parameters
-    if (!prompt || typeof prompt !== 'string') {
-      throw new Error('Prompt is required and must be a string');
+    if (!args.prompt || typeof args.prompt !== 'string' || args.prompt.trim().length === 0) {
+      throw validationError('Prompt is required and must be a non-empty string');
     }
 
-    if (!output_path || typeof output_path !== 'string') {
-      throw new Error('Output path is required and must be a string');
+    if (!args.output_path || typeof args.output_path !== 'string') {
+      throw validationError('Output path is required and must be a valid file path');
     }
 
-    // Validate parameters with Replicate client
-    const validation = this.replicateClient.validateParams({
-      prompt,
-      model: model as FluxModel,
-      aspect_ratio: aspect_ratio as AspectRatio,
-    });
+    const prompt = args.prompt.trim();
+    const outputPath = args.output_path;
+    const config = getConfig();
+    
+    // Ensure we have a valid model string
+    const modelParam: string = args.model || config.defaultModel;
+    const width = args.width || 1024;
+    const height = args.height || 1024;
+    const quality = args.quality || config.outputQuality;
 
-    if (!validation.isValid) {
-      throw new Error(`Invalid parameters: ${validation.errors.join(', ')}`);
+    // Validate and ensure model is supported
+    if (!this.replicateClient.isModelSupported(modelParam)) {
+      throw validationError(`Unsupported model: ${modelParam}. Supported models: ${this.replicateClient.getAvailableModels().join(', ')}`);
     }
 
-    // Ensure output directory exists
-    await this.ensureDirectoryExists(output_path);
+    // Now we know model is a valid FluxModel
+    const model = modelParam;
 
-    // Generate image
-    const startTime = Date.now();
-    console.error(`Starting image generation...`);
+    info('Starting image generation', { prompt, model, outputPath, width, height });
 
-    const result = await this.replicateClient.generateImageWithRetry({
-      prompt,
-      model: model as FluxModel,
-      aspect_ratio: aspect_ratio as AspectRatio,
-    });
+    try {
+      // Generate image
+      const result = await this.replicateClient.generateImage({
+        prompt,
+        model,
+        width,
+        height,
+      });
 
-    if (!result.success) {
-      throw new Error(result.error || 'Image generation failed');
-    }
-
-    // Download and save the first image
-    const imageUrl = result.imageUrls[0];
-    if (!imageUrl) {
-      throw new Error('No image URL returned from generation');
-    }
-
-    console.error(`Downloading image from: ${imageUrl}`);
-    const imageBuffer = await this.replicateClient.downloadImage(imageUrl);
-
-    // Check if we need image processing
-    const needsProcessing = final_width || final_height || 
-                           output_format !== this.determineFormatFromPath(output_path) ||
-                           quality !== this.configManager.getDefaultQuality();
-
-    let finalPath = output_path;
-    let processingResult;
-
-    if (needsProcessing) {
-      // Create temporary file for processing
-      const tempPath = await this.tempManager.createTempFile('processing', '.tmp');
-      
-      try {
-        // Prepare processing options
-        const processingOptions: ImageProcessingOptions = {
-          outputPath: output_path,
-          outputFormat: output_format as OutputFormat,
-          quality,
-        };
-
-        // Add resize options if specified
-        if (final_width || final_height) {
-          processingOptions.resize = {
-            width: final_width,
-            height: final_height,
-            fit: 'contain', // Maintain aspect ratio by default
-          };
-        }
-
-        // Validate processing options
-        const validation = this.imageProcessor.validateProcessingOptions(processingOptions);
-        if (!validation.isValid) {
-          throw new Error(`Invalid processing options: ${validation.errors.join(', ')}`);
-        }
-
-        // Process the image
-        console.error(`Processing image with Sharp...`);
-        processingResult = await this.imageProcessor.processImage(imageBuffer, processingOptions);
-
-        if (!processingResult.success) {
-          throw new Error(processingResult.error || 'Image processing failed');
-        }
-
-        console.error(`Image processing completed in ${processingResult.processingTime}ms`);
-        
-        // Clean up temp file
-        await this.tempManager.cleanupTempFile(tempPath);
-      } catch (error) {
-        // Clean up temp file on error
-        await this.tempManager.cleanupTempFile(tempPath);
-        throw error;
+      if (result.imageUrls.length === 0) {
+        throw processingError('No images were generated');
       }
-    } else {
-      // No processing needed, save directly
-      await this.ensureDirectoryExists(output_path);
-      await fs.writeFile(output_path, imageBuffer);
+
+      // Download the first image
+      const imageUrl = result.imageUrls[0];
+      if (!imageUrl) {
+        throw processingError('No valid image URL returned');
+      }
       
-      // Get original image metadata for response
-      const metadata = await this.imageProcessor.getImageMetadata(imageBuffer);
-      processingResult = {
-        success: true,
-        outputPath: output_path,
-        originalDimensions: {
-          width: metadata.width || 0,
-          height: metadata.height || 0,
-        },
-        finalDimensions: {
-          width: metadata.width || 0,
-          height: metadata.height || 0,
-        },
-        outputFormat: this.determineFormatFromPath(output_path),
-        fileSize: imageBuffer.length,
-        processingTime: 0,
+      const imageBuffer = await this.replicateClient.downloadImage(imageUrl);
+
+      // Process and save the image
+      const processResult = await this.imageProcessor.processImage(imageBuffer, {
+        outputPath,
+        quality,
+        width: args.width,
+        height: args.height,
+      });
+
+      info('Image generation completed', {
+        outputPath: processResult.outputPath,
+        fileSize: processResult.fileSize,
+        dimensions: `${processResult.width}x${processResult.height}`,
+        processingTime: result.processingTime,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Image generated successfully!\n\nOutput: ${processResult.outputPath}\nDimensions: ${processResult.width}x${processResult.height}\nFile size: ${Math.round(processResult.fileSize / 1024)}KB\nProcessing time: ${result.processingTime}ms`,
+          },
+        ],
       };
-    }
 
-    const totalTime = Date.now() - startTime;
-    const estimatedCost = this.replicateClient.estimateCost(model as FluxModel);
-
-    console.error(`Image generation completed in ${totalTime}ms`);
-    console.error(`Estimated cost: $${estimatedCost.toFixed(4)}`);
-
-    // Return success response
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            success: true,
-            local_file_path: processingResult.outputPath,
-            generation_cost: estimatedCost,
-            model_used: result.model,
-            original_dimensions: processingResult.originalDimensions,
-            final_dimensions: processingResult.finalDimensions,
-            output_format: processingResult.outputFormat,
-            file_size: processingResult.fileSize,
-            processing_time: totalTime,
-            image_processing_time: processingResult.processingTime,
-          }, null, 2),
-        },
-      ],
-    };
-  }
-
-  /**
-   * Ensure directory exists for the given file path
-   */
-  private async ensureDirectoryExists(filePath: string): Promise<void> {
-    const dir = dirname(filePath);
-    try {
-      await fs.access(dir);
-    } catch {
-      await fs.mkdir(dir, { recursive: true });
-    }
-  }
-
-  /**
-   * Determine output format from file path extension
-   */
-  private determineFormatFromPath(filePath: string): OutputFormat {
-    const ext = extname(filePath).toLowerCase();
-    switch (ext) {
-      case '.jpg':
-      case '.jpeg':
-        return 'jpg';
-      case '.png':
-        return 'png';
-      case '.webp':
-        return 'webp';
-      default:
-        return this.configManager.getDefaultOutputFormat();
-    }
-  }
-
-  /**
-   * Set up error handling for the server
-   */
-  private setupErrorHandling(): void {
-    // Handle uncaught exceptions
-    process.on('uncaughtException', (error) => {
-      console.error('Uncaught Exception:', error);
-      process.exit(1);
-    });
-
-    // Handle unhandled promise rejections
-    process.on('unhandledRejection', (reason, promise) => {
-      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-      process.exit(1);
-    });
-
-    // Handle SIGINT (Ctrl+C)
-    process.on('SIGINT', async () => {
-      console.error('Received SIGINT, shutting down gracefully...');
-      await this.shutdown();
-      process.exit(0);
-    });
-
-    // Handle SIGTERM
-    process.on('SIGTERM', async () => {
-      console.error('Received SIGTERM, shutting down gracefully...');
-      await this.shutdown();
-      process.exit(0);
-    });
-  }
-
-  /**
-   * Initialize the server (load config, run setup if needed)
-   */
-  async initialize(): Promise<boolean> {
-    try {
-      // Initialize configuration
-      await this.configManager.initialize();
-
-      // Check if setup is required
-      if (this.setupManager.isSetupRequired()) {
-        console.error('First-time setup required...');
-        const setupSuccess = await this.setupManager.runSetup();
-        if (!setupSuccess) {
-          return false;
-        }
-      }
-
-      // Initialize Replicate client
-      try {
-        this.replicateClient = new ReplicateClient();
-        
-        // Perform health check
-        const healthCheck = await this.replicateClient.healthCheck();
-        if (!healthCheck.healthy) {
-          console.error('Replicate API health check failed:', healthCheck.error);
-          return false;
-        }
-        
-        console.error('Replicate API connection verified');
-      } catch (error) {
-        console.error('Failed to initialize Replicate client:', error);
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Failed to initialize server:', error);
-      return false;
+    } catch (err) {
+      // Clean up any temp files
+      await this.tempManager.cleanupAll();
+      throw err;
     }
   }
 
@@ -408,46 +209,56 @@ class FluxReplicateMcpServer {
    * Start the MCP server
    */
   async start(): Promise<void> {
-    const transport = new StdioServerTransport();
-    await this.server.connect(transport);
-    console.error('Flux Replicate MCP Server running on stdio');
+    try {
+      // Validate configuration
+      getConfig(); // This will throw if config is invalid
+      
+      info('Starting Flux Replicate MCP Server');
+      
+      const transport = new StdioServerTransport();
+      await this.server.connect(transport);
+      
+      info('Server started successfully');
+    } catch (err) {
+      error('Failed to start server', { error: err instanceof Error ? err.message : 'Unknown error' });
+      process.exit(1);
+    }
   }
 
   /**
-   * Graceful shutdown
+   * Shutdown the server
    */
   async shutdown(): Promise<void> {
-    console.error('Shutting down server...');
-    await this.tempManager.shutdown();
+    info('Shutting down server');
+    await this.tempManager.cleanupAll();
+    await this.server.close();
   }
 }
 
 /**
- * Main function to start the server
+ * Main entry point
  */
 async function main(): Promise<void> {
-  try {
-    const server = new FluxReplicateMcpServer();
-    
-    // Initialize server (config and setup)
-    const initialized = await server.initialize();
-    if (!initialized) {
-      console.error('Server initialization failed');
-      process.exit(1);
-    }
-    
-    // Start the MCP server
-    await server.start();
-  } catch (error) {
-    console.error('Fatal error starting server:', error);
-    process.exit(1);
-  }
+  const server = new FluxMcpServer();
+  
+  // Handle graceful shutdown
+  process.on('SIGINT', async () => {
+    await server.shutdown();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    await server.shutdown();
+    process.exit(0);
+  });
+
+  await server.start();
 }
 
-// Start the server if this file is run directly
+// Start the server
 if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error('Fatal error in main():', error);
+  main().catch((err) => {
+    error('Server crashed', { error: err instanceof Error ? err.message : 'Unknown error' });
     process.exit(1);
   });
 } 

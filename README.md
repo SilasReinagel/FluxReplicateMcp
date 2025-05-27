@@ -1,275 +1,160 @@
 # Flux Replicate MCP Server
 
-A Model Context Protocol (MCP) server that enables AI assistants to generate high-quality images using Flux Pro and Flux Schnell models via Replicate's API.
+A **simple** Model Context Protocol (MCP) server for generating images using Flux Pro and Flux Schnell models via the Replicate API.
 
-## Features
+## ✨ Simplicity First
 
-- 🎨 **Image Generation**: Generate images using Flux Pro and Flux Schnell models
-- 🔧 **Easy Setup**: First-run setup with API key validation
-- 📐 **Aspect Ratios**: Support for multiple aspect ratios (1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 9:21)
-- 🖼️ **Image Processing**: Sharp-based resizing, format conversion, and quality control
-- 📁 **Multiple Formats**: Support for JPG, PNG, and WebP output formats
-- 🗂️ **Temp Management**: Automatic cleanup of temporary files with disk space monitoring
-- 💰 **Cost Tracking**: Transparent cost estimation and reporting
-- 🔒 **Secure**: API keys stored securely with proper file permissions
-- 🔄 **Retry Logic**: Automatic retry with exponential backoff for transient failures
-- ⚡ **Fast**: Built with Bun and TypeScript for optimal performance
+This server has been designed with simplicity as the primary goal:
+- **751 lines of code** (down from 3,200+ LOC)
+- **7 files** (down from 15+ files)
+- **Environment variable configuration** (no complex config files)
+- **Essential functionality only** (image generation that just works)
 
-## Installation
+## 🚀 Quick Start
 
-### Prerequisites
+### 1. Install Dependencies
 
-- [Bun](https://bun.sh/) (latest version)
-- [Replicate API Key](https://replicate.com/account/api-tokens)
-
-### Setup
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd FluxReplicateMcp
-```
-
-2. Install dependencies:
 ```bash
 bun install
 ```
 
-3. Build the project:
+### 2. Configure Environment
+
+Copy the example environment file and add your Replicate API token:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your Replicate API token:
+
+```env
+REPLICATE_API_TOKEN=r8_your_token_here
+```
+
+### 3. Build and Run
+
+```bash
+bun run build
+bun run start
+```
+
+## 🔧 Configuration
+
+All configuration is done via environment variables:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `REPLICATE_API_TOKEN` | ✅ | - | Your Replicate API token |
+| `FLUX_DEFAULT_MODEL` | ❌ | `flux-pro` | Default model (`flux-pro` or `flux-schnell`) |
+| `FLUX_OUTPUT_FORMAT` | ❌ | `jpg` | Default output format (`jpg`, `png`, `webp`) |
+| `FLUX_OUTPUT_QUALITY` | ❌ | `80` | Default quality for lossy formats (1-100) |
+
+## 🛠️ Available Tools
+
+### `generate_image`
+
+Generate images using Flux models.
+
+**Parameters:**
+- `prompt` (required): Text description of the image to generate
+- `output_path` (required): Local file path where the image will be saved
+- `model` (optional): Flux model to use (`flux-pro` or `flux-schnell`)
+- `width` (optional): Image width in pixels (default: 1024)
+- `height` (optional): Image height in pixels (default: 1024)
+- `quality` (optional): Image quality for lossy formats (1-100)
+
+**Example:**
+```json
+{
+  "prompt": "A serene mountain landscape at sunset",
+  "output_path": "/path/to/output/image.jpg",
+  "model": "flux-pro",
+  "width": 1024,
+  "height": 1024,
+  "quality": 90
+}
+```
+
+## 📁 Architecture
+
+The simplified codebase consists of just 7 focused files:
+
+```
+src/
+├── index.ts           # MCP server (263 LOC)
+├── replicate.ts       # Replicate API client (146 LOC)
+├── image.ts           # Image processing with Sharp (124 LOC)
+├── temp.ts            # Basic temp file management (73 LOC)
+├── errors.ts          # Simple error handling (58 LOC)
+├── config.ts          # Environment-based config (49 LOC)
+└── log.ts             # Basic JSON logging (38 LOC)
+```
+
+## 🎯 Design Philosophy
+
+This server follows the principle: **"Simple enough to understand in 30 minutes, powerful enough to generate great images"**
+
+### What We Kept
+- ✅ Core image generation with Flux Pro/Schnell
+- ✅ Image processing and format conversion
+- ✅ Basic error handling and logging
+- ✅ MCP protocol compliance
+
+### What We Removed
+- ❌ Complex configuration management
+- ❌ Extensive validation and retry logic
+- ❌ Performance tracking and cost analysis
+- ❌ File-based configuration and migrations
+- ❌ Comprehensive test suites
+- ❌ Setup wizards and health checks
+
+## 🔗 MCP Integration
+
+### Claude Desktop
+
+Add to your Claude Desktop MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "flux-replicate": {
+      "command": "bun",
+      "args": ["run", "/path/to/flux-replicate-mcp-server/dist/index.js"],
+      "env": {
+        "REPLICATE_API_TOKEN": "your_token_here"
+      }
+    }
+  }
+}
+```
+
+## 🚨 Error Handling
+
+The server uses simple error codes:
+- `AUTH`: Authentication/API key issues
+- `API`: Replicate API errors
+- `VALIDATION`: Invalid input parameters
+- `PROCESSING`: Image processing failures
+
+All errors are logged as structured JSON to stderr for MCP compatibility.
+
+## 📝 Development
+
+### Build
 ```bash
 bun run build
 ```
 
-4. Run the server (first-time setup will be prompted):
+### Development Mode
 ```bash
-bun start
+bun run dev
 ```
 
-## Configuration
+## 📄 License
 
-The server stores configuration in `~/.flux-replicate-mcp/config.json` with the following structure:
+MIT
 
-```json
-{
-  "replicate_api_key": "your-api-key",
-  "default_model": "flux-pro",
-  "default_aspect_ratio": "1:1",
-  "default_output_format": "jpg",
-  "default_quality": 80,
-  "temp_directory": "./temp",
-  "max_concurrent_generations": 3
-}
-```
+---
 
-## Usage
-
-### MCP Tool: `generate_image`
-
-Generate images using Flux models via the MCP protocol.
-
-#### Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `prompt` | string | ✅ | - | Text description of the image to generate |
-| `output_path` | string | ✅ | - | Local file path where the image will be saved |
-| `model` | string | ❌ | `flux-pro` | Model to use: `flux-pro` or `flux-schnell` |
-| `aspect_ratio` | string | ❌ | `1:1` | Aspect ratio: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `21:9`, `9:21` |
-| `final_width` | number | ❌ | - | Target width for final image processing |
-| `final_height` | number | ❌ | - | Target height for final image processing |
-| `output_format` | string | ❌ | `jpg` | Output format: `jpg`, `jpeg`, `png`, `webp` |
-| `quality` | number | ❌ | `80` | Quality for lossy formats (1-100) |
-
-#### Response
-
-```json
-{
-  "success": true,
-  "local_file_path": "./output/image.jpg",
-  "generation_cost": 0.055,
-  "model_used": "Flux Pro",
-  "original_dimensions": {
-    "width": 1024,
-    "height": 1024
-  },
-  "final_dimensions": {
-    "width": 1024,
-    "height": 1024
-  },
-  "output_format": "jpg",
-  "file_size": 245760,
-  "processing_time": 15420,
-  "image_processing_time": 150
-}
-```
-
-### Example Usage
-
-#### Basic Generation
-```json
-{
-  "name": "generate_image",
-  "arguments": {
-    "prompt": "A serene mountain landscape at sunset",
-    "output_path": "./images/mountain_sunset.jpg"
-  }
-}
-```
-
-#### Advanced Generation
-```json
-{
-  "name": "generate_image",
-  "arguments": {
-    "prompt": "A futuristic cityscape with flying cars",
-    "model": "flux-schnell",
-    "aspect_ratio": "16:9",
-    "output_path": "./images/futuristic_city.jpg"
-  }
-}
-```
-
-#### Image Processing Example
-```json
-{
-  "name": "generate_image",
-  "arguments": {
-    "prompt": "A detailed portrait of a wise old wizard",
-    "model": "flux-pro",
-    "aspect_ratio": "4:3",
-    "output_path": "./images/wizard_portrait.webp",
-    "final_width": 800,
-    "final_height": 600,
-    "output_format": "webp",
-    "quality": 90
-  }
-}
-```
-
-## Supported Models
-
-### Flux Pro
-- **Model ID**: `black-forest-labs/flux-pro`
-- **Quality**: Highest quality output
-- **Speed**: Slower generation (~30-60 seconds)
-- **Cost**: ~$0.055 per image
-- **Best for**: Professional use cases, final artwork
-
-### Flux Schnell
-- **Model ID**: `black-forest-labs/flux-schnell`
-- **Quality**: Good quality output
-- **Speed**: Faster generation (~10-20 seconds)
-- **Cost**: ~$0.003 per image
-- **Best for**: Rapid prototyping, testing, iterations
-
-## Development
-
-### Scripts
-
-- `bun run build` - Build the project
-- `bun run dev` - Run in development mode with watch
-- `bun start` - Start the MCP server
-- `bun test` - Run tests
-- `bun run test:watch` - Run tests in watch mode
-- `bun run coverage` - Generate test coverage report
-- `bun run lint` - Run ESLint
-- `bun run lint:fix` - Fix ESLint issues
-
-### Testing
-
-```bash
-# Run all tests
-bun test
-
-# Run tests with coverage
-bun run coverage
-
-# Run tests in watch mode
-bun run test:watch
-```
-
-### Project Structure
-
-```
-src/
-├── index.ts              # Main MCP server entry point
-├── config.ts             # Configuration management
-├── setup.ts              # First-run setup and API key management
-├── replicate-client.ts   # Replicate API client wrapper
-├── image-processor.ts    # Sharp-based image processing pipeline
-├── temp-manager.ts       # Temporary file management and cleanup
-└── *.test.ts            # Test files
-```
-
-## Roadmap
-
-### Phase 1: Core Functionality ✅
-- [x] Basic MCP server framework
-- [x] Configuration management
-- [x] API key management with setup flow
-- [x] Replicate API integration
-- [x] Core image generation tool
-- [x] Aspect ratio support
-
-### Phase 2: Advanced Features ✅
-- [x] Sharp image processing pipeline
-- [x] Multiple output format support
-- [x] Temporary file management
-- [ ] Enhanced error handling
-- [ ] Structured logging system
-
-### Phase 3: Polish & Testing
-- [ ] Comprehensive test suite
-- [ ] Performance optimization
-- [ ] Documentation improvements
-- [ ] User experience enhancements
-
-### Future Enhancements
-- [ ] Batch image generation
-- [ ] Image-to-image generation
-- [ ] Cloud storage integration
-- [ ] Web interface for configuration
-
-## Troubleshooting
-
-### Common Issues
-
-1. **API Key Issues**
-   - Ensure your Replicate API key is valid and has sufficient credits
-   - API keys should start with `r8_` followed by alphanumeric characters
-   - Check your account at https://replicate.com/account
-
-2. **Network Issues**
-   - Verify internet connectivity
-   - Check if Replicate API is accessible from your network
-   - Firewall or proxy settings may interfere
-
-3. **File Permission Issues**
-   - Ensure the output directory is writable
-   - Check file system permissions for the config directory
-
-### Getting Help
-
-1. Check the error messages in the console output
-2. Verify your configuration file at `~/.flux-replicate-mcp/config.json`
-3. Test API connectivity with a simple generation
-4. Review the logs for detailed error information
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass
-6. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Acknowledgments
-
-- [Replicate](https://replicate.com/) for providing the AI model API
-- [Black Forest Labs](https://blackforestlabs.ai/) for the Flux models
-- [Model Context Protocol](https://modelcontextprotocol.io/) for the MCP framework 
+**Note:** This is a simplified version focused on core functionality. For advanced features like retry logic, performance tracking, or complex validation, consider the full-featured version. 
