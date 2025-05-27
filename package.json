@@ -1,0 +1,42 @@
+{
+  "name": "flux-replicate-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for generating images using Flux Pro and Flux Schnell models via Replicate API",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "dev": "bun --watch src/index.ts",
+    "start": "bun dist/index.js",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:ui": "vitest --ui",
+    "coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "flux",
+    "replicate",
+    "image-generation",
+    "ai"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "replicate": "^0.25.0",
+    "sharp": "^0.33.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "vitest": "^1.0.0",
+    "@vitest/ui": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 
