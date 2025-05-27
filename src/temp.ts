@@ -21,7 +21,7 @@ export class TempManager {
   /**
    * Create a temporary file path
    */
-  async createTempFile(extension: string = '.tmp'): Promise<string> {
+  createTempFile = async (extension: string = '.tmp'): Promise<string> => {
     try {
       // Ensure temp directory exists
       await fs.mkdir(this.tempDir, { recursive: true });
@@ -42,33 +42,33 @@ export class TempManager {
       }
       throw processingError('Failed to create temp file');
     }
-  }
+  };
 
   /**
    * Clean up a specific temp file
    */
-  async cleanupFile(filePath: string): Promise<void> {
+  cleanupFile = async (filePath: string): Promise<void> => {
     try {
       await fs.unlink(filePath);
       this.tempFiles.delete(filePath);
     } catch (error) {
       // Ignore errors if file doesn't exist
     }
-  }
+  };
 
   /**
    * Clean up all tracked temp files
    */
-  async cleanupAll(): Promise<void> {
+  cleanupAll = async (): Promise<void> => {
     const promises = Array.from(this.tempFiles).map(filePath => this.cleanupFile(filePath));
     await Promise.allSettled(promises);
     this.tempFiles.clear();
-  }
+  };
 
   /**
    * Get temp directory path
    */
-  getTempDir(): string {
+  getTempDir = (): string => {
     return this.tempDir;
-  }
+  };
 } 

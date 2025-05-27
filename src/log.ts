@@ -13,7 +13,7 @@ interface LogEntry {
 /**
  * Log an info message
  */
-export function info(message: string, context?: Record<string, any>): void {
+export const info = (message: string, context?: Record<string, any>): void => {
   const entry: LogEntry = {
     timestamp: new Date().toISOString(),
     level: 'info',
@@ -22,12 +22,12 @@ export function info(message: string, context?: Record<string, any>): void {
   };
   
   console.error(JSON.stringify(entry));
-}
+};
 
 /**
  * Log an error message
  */
-export function error(message: string, context?: Record<string, any>): void {
+export const error = (message: string, context?: Record<string, any>): void => {
   const entry: LogEntry = {
     timestamp: new Date().toISOString(),
     level: 'error',
@@ -36,4 +36,4 @@ export function error(message: string, context?: Record<string, any>): void {
   };
   
   console.error(JSON.stringify(entry));
-} 
+}; 

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "flux-replicate-mcp": {
+      "command": "bun",
+      "args": ["run", "src/index.ts"]
+    }
+  }
+}

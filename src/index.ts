@@ -11,9 +11,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { ReplicateClient } from './replicate.js';
 import { ImageProcessor } from './image.js';
 import { TempManager } from './temp.js';
-import { getConfig } from './config.js';
+import { getConfig, ensureWorkingDirectory } from './config.js';
 import { validationError, processingError, McpError } from './errors.js';
 import { info, error } from './log.js';
+import { join, isAbsolute, basename } from 'path';
 
 /**
  * Simple MCP Server for Flux image generation
@@ -23,6 +24,7 @@ class FluxMcpServer {
   private replicateClient: ReplicateClient;
   private imageProcessor: ImageProcessor;
   private tempManager: TempManager;
+  private workingDirectory: string = '';
 
   constructor() {
     this.server = new Server(
@@ -47,7 +49,7 @@ class FluxMcpServer {
   /**
    * Set up MCP request handlers
    */
-  private setupHandlers(): void {
+  private setupHandlers = (): void => {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
@@ -69,7 +71,7 @@ class FluxMcpServer {
                 },
                 output_path: {
                   type: 'string',
-                  description: 'Local file path where the image will be saved',
+                  description: 'Filename or relative path within the working directory (absolute paths will be converted to working directory)',
                 },
                 width: {
                   type: 'number',
@@ -118,12 +120,26 @@ class FluxMcpServer {
 
       throw validationError(`Unknown tool: ${name}`);
     });
-  }
+  };
+
+  /**
+   * Resolve output path to working directory
+   */
+  private resolveOutputPath = (userPath: string): string => {
+    // If it's an absolute path, extract just the filename and put it in working directory
+    if (isAbsolute(userPath)) {
+      const filename = basename(userPath);
+      return join(this.workingDirectory, filename);
+    }
+    
+    // If it's a relative path, join it with working directory
+    return join(this.workingDirectory, userPath);
+  };
 
   /**
    * Handle image generation request
    */
-  private async handleGenerateImage(args: any): Promise<any> {
+  private handleGenerateImage = async (args: any): Promise<any> => {
     // Validate required parameters
     if (!args.prompt || typeof args.prompt !== 'string' || args.prompt.trim().length === 0) {
       throw validationError('Prompt is required and must be a non-empty string');
@@ -134,7 +150,8 @@ class FluxMcpServer {
     }
 
     const prompt = args.prompt.trim();
-    const outputPath = args.output_path;
+    const userOutputPath = args.output_path;
+    const resolvedOutputPath = this.resolveOutputPath(userOutputPath);
     const config = getConfig();
     
     // Ensure we have a valid model string
@@ -151,7 +168,15 @@ class FluxMcpServer {
     // Now we know model is a valid FluxModel
     const model = modelParam;
 
-    info('Starting image generation', { prompt, model, outputPath, width, height });
+    info('Starting image generation', { 
+      prompt, 
+      model, 
+      userOutputPath, 
+      resolvedOutputPath, 
+      workingDirectory: this.workingDirectory,
+      width, 
+      height 
+    });
 
     try {
       // Generate image
@@ -176,7 +201,7 @@ class FluxMcpServer {
 
       // Process and save the image
       const processResult = await this.imageProcessor.processImage(imageBuffer, {
-        outputPath,
+        outputPath: resolvedOutputPath,
         quality,
         width: args.width,
         height: args.height,
@@ -193,7 +218,7 @@ class FluxMcpServer {
         content: [
           {
             type: 'text',
-            text: `Image generated successfully!\n\nOutput: ${processResult.outputPath}\nDimensions: ${processResult.width}x${processResult.height}\nFile size: ${Math.round(processResult.fileSize / 1024)}KB\nProcessing time: ${result.processingTime}ms`,
+            text: `Image generated successfully!\n\nOutput: ${processResult.outputPath}\nDimensions: ${processResult.width}x${processResult.height}\nFile size: ${Math.round(processResult.fileSize / 1024)}KB\nProcessing time: ${result.processingTime}ms\nWorking Directory: ${this.workingDirectory}`,
           },
         ],
       };
@@ -203,42 +228,50 @@ class FluxMcpServer {
       await this.tempManager.cleanupAll();
       throw err;
     }
-  }
+  };
 
   /**
    * Start the MCP server
    */
-  async start(): Promise<void> {
+  start = async (): Promise<void> => {
     try {
       // Validate configuration
-      getConfig(); // This will throw if config is invalid
+      const config = getConfig();
       
-      info('Starting Flux Replicate MCP Server');
+      // Initialize working directory
+      this.workingDirectory = await ensureWorkingDirectory(config.workingDirectory);
+      
+      info('Starting Flux Replicate MCP Server', {
+        platform: process.platform,
+        workingDirectory: this.workingDirectory
+      });
       
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
       
-      info('Server started successfully');
+      info('Server started successfully', {
+        workingDirectory: this.workingDirectory
+      });
     } catch (err) {
       error('Failed to start server', { error: err instanceof Error ? err.message : 'Unknown error' });
       process.exit(1);
     }
-  }
+  };
 
   /**
    * Shutdown the server
    */
-  async shutdown(): Promise<void> {
+  shutdown = async (): Promise<void> => {
     info('Shutting down server');
     await this.tempManager.cleanupAll();
     await this.server.close();
-  }
+  };
 }
 
 /**
  * Main entry point
  */
-async function main(): Promise<void> {
+const main = async (): Promise<void> => {
   const server = new FluxMcpServer();
   
   // Handle graceful shutdown
@@ -253,7 +286,7 @@ async function main(): Promise<void> {
   });
 
   await server.start();
-}
+};
 
 // Start the server
 if (import.meta.url === `file://${process.argv[1]}`) {

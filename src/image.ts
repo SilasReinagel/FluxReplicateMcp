@@ -42,7 +42,7 @@ export class ImageProcessor {
   /**
    * Process image buffer and save to file
    */
-  async processImage(buffer: Buffer, options: ProcessImageOptions): Promise<ProcessImageResult> {
+  processImage = async (buffer: Buffer, options: ProcessImageOptions): Promise<ProcessImageResult> => {
     try {
       const config = getConfig();
       
@@ -99,12 +99,12 @@ export class ImageProcessor {
       }
       throw processingError('Image processing failed with unknown error');
     }
-  }
+  };
   
   /**
    * Ensure directory exists for file path
    */
-  private async ensureDirectoryExists(filePath: string): Promise<void> {
+  private ensureDirectoryExists = async (filePath: string): Promise<void> => {
     try {
       const dir = dirname(filePath);
       await fs.mkdir(dir, { recursive: true });
@@ -114,12 +114,12 @@ export class ImageProcessor {
       }
       throw processingError('Failed to create directory');
     }
-  }
+  };
   
   /**
    * Get supported formats
    */
-  getSupportedFormats(): OutputFormat[] {
+  getSupportedFormats = (): OutputFormat[] => {
     return ['jpg', 'png', 'webp'];
-  }
+  };
 } 

@@ -1,5 +1,5 @@
 Bun + Typescript + MCP
 
-ES6 Syntax
+ES6 Syntax. Prefer functions to classes almost everywhere.
 
 Do not use .env or dotenv

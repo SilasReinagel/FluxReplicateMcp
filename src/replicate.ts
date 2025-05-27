@@ -55,7 +55,7 @@ export class ReplicateClient {
   /**
    * Generate image using Flux model
    */
-  async generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
+  generateImage = async (params: GenerateImageParams): Promise<GenerateImageResult> => {
     const startTime = Date.now();
     
     // Validate parameters
@@ -71,16 +71,32 @@ export class ReplicateClient {
     }
 
     try {
-      // Prepare input parameters
-      const input = {
+      // Prepare base input parameters
+      const baseInput = {
         prompt: params.prompt.trim(),
         width: params.width || 1024,
         height: params.height || 1024,
         num_outputs: params.num_outputs || 1,
-        guidance_scale: params.guidance_scale || 3.5,
-        num_inference_steps: params.num_inference_steps || 28,
         ...(params.seed && { seed: params.seed }),
       };
+
+      // Add model-specific parameters
+      let input: any;
+      if (model === 'flux-schnell') {
+        // Flux Schnell has different parameter constraints
+        input = {
+          ...baseInput,
+          num_inference_steps: Math.min(params.num_inference_steps || 4, 4), // Max 4 for schnell
+          // Flux Schnell doesn't use guidance_scale
+        };
+      } else {
+        // Flux Pro parameters
+        input = {
+          ...baseInput,
+          guidance_scale: params.guidance_scale || 3.5,
+          num_inference_steps: params.num_inference_steps || 28,
+        };
+      }
 
       // Run the prediction
       const prediction = await this.client.run(FLUX_MODELS[model], { input });
@@ -109,12 +125,12 @@ export class ReplicateClient {
       }
       throw apiError('Image generation failed with unknown error');
     }
-  }
+  };
 
   /**
    * Download image from URL
    */
-  async downloadImage(url: string): Promise<Buffer> {
+  downloadImage = async (url: string): Promise<Buffer> => {
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -129,19 +145,19 @@ export class ReplicateClient {
       }
       throw apiError('Failed to download image with unknown error');
     }
-  }
+  };
 
   /**
    * Check if model is supported
    */
-  isModelSupported(model: string): model is FluxModel {
+  isModelSupported = (model: string): model is FluxModel => {
     return model in FLUX_MODELS;
-  }
+  };
 
   /**
    * Get available models
    */
-  getAvailableModels(): FluxModel[] {
+  getAvailableModels = (): FluxModel[] => {
     return Object.keys(FLUX_MODELS) as FluxModel[];
-  }
+  };
 } 
