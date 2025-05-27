@@ -7,6 +7,9 @@ A Model Context Protocol (MCP) server that enables AI assistants to generate hig
 - 🎨 **Image Generation**: Generate images using Flux Pro and Flux Schnell models
 - 🔧 **Easy Setup**: First-run setup with API key validation
 - 📐 **Aspect Ratios**: Support for multiple aspect ratios (1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 9:21)
+- 🖼️ **Image Processing**: Sharp-based resizing, format conversion, and quality control
+- 📁 **Multiple Formats**: Support for JPG, PNG, and WebP output formats
+- 🗂️ **Temp Management**: Automatic cleanup of temporary files with disk space monitoring
 - 💰 **Cost Tracking**: Transparent cost estimation and reporting
 - 🔒 **Secure**: API keys stored securely with proper file permissions
 - 🔄 **Retry Logic**: Automatic retry with exponential backoff for transient failures
@@ -72,10 +75,10 @@ Generate images using Flux models via the MCP protocol.
 | `output_path` | string | ✅ | - | Local file path where the image will be saved |
 | `model` | string | ❌ | `flux-pro` | Model to use: `flux-pro` or `flux-schnell` |
 | `aspect_ratio` | string | ❌ | `1:1` | Aspect ratio: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `21:9`, `9:21` |
-| `final_width` | number | ❌ | - | Target width for final processing (future feature) |
-| `final_height` | number | ❌ | - | Target height for final processing (future feature) |
-| `output_format` | string | ❌ | `jpg` | Output format: `jpg`, `png`, `webp` (future feature) |
-| `quality` | number | ❌ | `80` | Quality for lossy formats (1-100) (future feature) |
+| `final_width` | number | ❌ | - | Target width for final image processing |
+| `final_height` | number | ❌ | - | Target height for final image processing |
+| `output_format` | string | ❌ | `jpg` | Output format: `jpg`, `jpeg`, `png`, `webp` |
+| `quality` | number | ❌ | `80` | Quality for lossy formats (1-100) |
 
 #### Response
 
@@ -93,7 +96,10 @@ Generate images using Flux models via the MCP protocol.
     "width": 1024,
     "height": 1024
   },
-  "processing_time": 15420
+  "output_format": "jpg",
+  "file_size": 245760,
+  "processing_time": 15420,
+  "image_processing_time": 150
 }
 ```
 
@@ -119,6 +125,23 @@ Generate images using Flux models via the MCP protocol.
     "model": "flux-schnell",
     "aspect_ratio": "16:9",
     "output_path": "./images/futuristic_city.jpg"
+  }
+}
+```
+
+#### Image Processing Example
+```json
+{
+  "name": "generate_image",
+  "arguments": {
+    "prompt": "A detailed portrait of a wise old wizard",
+    "model": "flux-pro",
+    "aspect_ratio": "4:3",
+    "output_path": "./images/wizard_portrait.webp",
+    "final_width": 800,
+    "final_height": 600,
+    "output_format": "webp",
+    "quality": 90
   }
 }
 ```
@@ -173,6 +196,8 @@ src/
 ├── config.ts             # Configuration management
 ├── setup.ts              # First-run setup and API key management
 ├── replicate-client.ts   # Replicate API client wrapper
+├── image-processor.ts    # Sharp-based image processing pipeline
+├── temp-manager.ts       # Temporary file management and cleanup
 └── *.test.ts            # Test files
 ```
 
@@ -186,10 +211,10 @@ src/
 - [x] Core image generation tool
 - [x] Aspect ratio support
 
-### Phase 2: Advanced Features (In Progress)
-- [ ] Sharp image processing pipeline
-- [ ] Multiple output format support
-- [ ] Temporary file management
+### Phase 2: Advanced Features ✅
+- [x] Sharp image processing pipeline
+- [x] Multiple output format support
+- [x] Temporary file management
 - [ ] Enhanced error handling
 - [ ] Structured logging system
 

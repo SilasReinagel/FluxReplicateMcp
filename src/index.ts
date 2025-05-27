@@ -6,8 +6,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { ConfigManager } from './config.js';
 import { SetupManager } from './setup.js';
 import { ReplicateClient, type FluxModel, type AspectRatio } from './replicate-client.js';
+import { ImageProcessor, type OutputFormat, type ImageProcessingOptions } from './image-processor.js';
+import { TempManager } from './temp-manager.js';
 import { promises as fs } from 'fs';
-import { dirname } from 'path';
+import { dirname, extname } from 'path';
 
 /**
  * Flux Replicate MCP Server
@@ -18,10 +20,14 @@ class FluxReplicateMcpServer {
   private configManager: ConfigManager;
   private setupManager: SetupManager;
   private replicateClient: ReplicateClient | null = null;
+  private imageProcessor: ImageProcessor;
+  private tempManager: TempManager;
 
   constructor() {
     this.configManager = ConfigManager.getInstance();
     this.setupManager = new SetupManager();
+    this.imageProcessor = new ImageProcessor();
+    this.tempManager = new TempManager();
     this.server = new Server(
       {
         name: 'flux-replicate-mcp-server',
@@ -140,11 +146,10 @@ class FluxReplicateMcpServer {
       model = this.configManager.getDefaultModel(),
       aspect_ratio = this.configManager.getDefaultAspectRatio(),
       output_path,
-      // TODO: Implement Sharp processing for these parameters in TASK-008
-      // final_width,
-      // final_height,
-      // output_format = this.configManager.getDefaultOutputFormat(),
-      // quality = this.configManager.getDefaultQuality(),
+      final_width,
+      final_height,
+      output_format = this.configManager.getDefaultOutputFormat(),
+      quality = this.configManager.getDefaultQuality(),
     } = args;
 
     // Validate required parameters
@@ -193,8 +198,81 @@ class FluxReplicateMcpServer {
     console.error(`Downloading image from: ${imageUrl}`);
     const imageBuffer = await this.replicateClient.downloadImage(imageUrl);
 
-    // Save the image (for now, just save the original - Sharp processing will be added in TASK-008)
-    await fs.writeFile(output_path, imageBuffer);
+    // Check if we need image processing
+    const needsProcessing = final_width || final_height || 
+                           output_format !== this.determineFormatFromPath(output_path) ||
+                           quality !== this.configManager.getDefaultQuality();
+
+    let finalPath = output_path;
+    let processingResult;
+
+    if (needsProcessing) {
+      // Create temporary file for processing
+      const tempPath = await this.tempManager.createTempFile('processing', '.tmp');
+      
+      try {
+        // Prepare processing options
+        const processingOptions: ImageProcessingOptions = {
+          outputPath: output_path,
+          outputFormat: output_format as OutputFormat,
+          quality,
+        };
+
+        // Add resize options if specified
+        if (final_width || final_height) {
+          processingOptions.resize = {
+            width: final_width,
+            height: final_height,
+            fit: 'contain', // Maintain aspect ratio by default
+          };
+        }
+
+        // Validate processing options
+        const validation = this.imageProcessor.validateProcessingOptions(processingOptions);
+        if (!validation.isValid) {
+          throw new Error(`Invalid processing options: ${validation.errors.join(', ')}`);
+        }
+
+        // Process the image
+        console.error(`Processing image with Sharp...`);
+        processingResult = await this.imageProcessor.processImage(imageBuffer, processingOptions);
+
+        if (!processingResult.success) {
+          throw new Error(processingResult.error || 'Image processing failed');
+        }
+
+        console.error(`Image processing completed in ${processingResult.processingTime}ms`);
+        
+        // Clean up temp file
+        await this.tempManager.cleanupTempFile(tempPath);
+      } catch (error) {
+        // Clean up temp file on error
+        await this.tempManager.cleanupTempFile(tempPath);
+        throw error;
+      }
+    } else {
+      // No processing needed, save directly
+      await this.ensureDirectoryExists(output_path);
+      await fs.writeFile(output_path, imageBuffer);
+      
+      // Get original image metadata for response
+      const metadata = await this.imageProcessor.getImageMetadata(imageBuffer);
+      processingResult = {
+        success: true,
+        outputPath: output_path,
+        originalDimensions: {
+          width: metadata.width || 0,
+          height: metadata.height || 0,
+        },
+        finalDimensions: {
+          width: metadata.width || 0,
+          height: metadata.height || 0,
+        },
+        outputFormat: this.determineFormatFromPath(output_path),
+        fileSize: imageBuffer.length,
+        processingTime: 0,
+      };
+    }
 
     const totalTime = Date.now() - startTime;
     const estimatedCost = this.replicateClient.estimateCost(model as FluxModel);
@@ -209,12 +287,15 @@ class FluxReplicateMcpServer {
           type: 'text',
           text: JSON.stringify({
             success: true,
-            local_file_path: output_path,
+            local_file_path: processingResult.outputPath,
             generation_cost: estimatedCost,
             model_used: result.model,
-            original_dimensions: result.dimensions,
-            final_dimensions: result.dimensions, // Will be different after Sharp processing
+            original_dimensions: processingResult.originalDimensions,
+            final_dimensions: processingResult.finalDimensions,
+            output_format: processingResult.outputFormat,
+            file_size: processingResult.fileSize,
             processing_time: totalTime,
+            image_processing_time: processingResult.processingTime,
           }, null, 2),
         },
       ],
@@ -230,6 +311,24 @@ class FluxReplicateMcpServer {
       await fs.access(dir);
     } catch {
       await fs.mkdir(dir, { recursive: true });
+    }
+  }
+
+  /**
+   * Determine output format from file path extension
+   */
+  private determineFormatFromPath(filePath: string): OutputFormat {
+    const ext = extname(filePath).toLowerCase();
+    switch (ext) {
+      case '.jpg':
+      case '.jpeg':
+        return 'jpg';
+      case '.png':
+        return 'png';
+      case '.webp':
+        return 'webp';
+      default:
+        return this.configManager.getDefaultOutputFormat();
     }
   }
 
@@ -250,14 +349,16 @@ class FluxReplicateMcpServer {
     });
 
     // Handle SIGINT (Ctrl+C)
-    process.on('SIGINT', () => {
+    process.on('SIGINT', async () => {
       console.error('Received SIGINT, shutting down gracefully...');
+      await this.shutdown();
       process.exit(0);
     });
 
     // Handle SIGTERM
-    process.on('SIGTERM', () => {
+    process.on('SIGTERM', async () => {
       console.error('Received SIGTERM, shutting down gracefully...');
+      await this.shutdown();
       process.exit(0);
     });
   }
@@ -310,6 +411,14 @@ class FluxReplicateMcpServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Flux Replicate MCP Server running on stdio');
+  }
+
+  /**
+   * Graceful shutdown
+   */
+  async shutdown(): Promise<void> {
+    console.error('Shutting down server...');
+    await this.tempManager.shutdown();
   }
 }
 
