@@ -1,13 +1,17 @@
 {
   "name": "flux-replicate-mcp-server",
-  "version": "1.0.0",
-  "description": "MCP server for generating images using Flux Pro and Flux Schnell models via Replicate API",
+  "version": "0.1.0",
+  "description": "Simple MCP server for generating images using Flux Pro and Flux Schnell models via Replicate API",
   "main": "dist/index.js",
+  "bin": {
+    "flux-replicate-mcp": "dist/index.js"
+  },
   "type": "module",
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target node",
     "dev": "bun --watch src/index.ts",
-    "start": "bun dist/index.js"
+    "start": "bun dist/index.js",
+    "prepublishOnly": "bun run build"
   },
   "keywords": [
     "mcp",
@@ -15,10 +19,29 @@
     "flux",
     "replicate",
     "image-generation",
-    "ai"
+    "ai",
+    "claude",
+    "anthropic",
+    "typescript",
+    "bun"
   ],
-  "author": "Your Name",
+  "author": "Silas Reinagel <silas.reinagel@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SilasReinagel/flux-replicate-mcp.git"
+  },
+  "homepage": "https://github.com/SilasReinagel/flux-replicate-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/SilasReinagel/flux-replicate-mcp/issues"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    ".env.example",
+    "INSTALLATION.md"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "replicate": "^0.25.0",
@@ -30,5 +53,10 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
 }

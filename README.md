@@ -13,28 +13,37 @@ This server has been designed with simplicity as the primary goal:
 
 ## 🚀 Quick Start
 
-### 1. Install Dependencies
+### Global Installation (Recommended)
 
+The easiest way to get started is with `npx` or `bunx` - no installation required!
+
+```bash
+# Set your Replicate API token
+export REPLICATE_API_TOKEN="r8_your_token_here"
+
+# Run with npx (Node.js)
+npx flux-replicate-mcp-server
+
+# OR run with bunx (Bun)
+bunx flux-replicate-mcp-server
+```
+
+📖 **[Complete Installation Guide →](INSTALLATION.md)**
+
+### Local Development
+
+1. **Install Dependencies**
 ```bash
 bun install
 ```
 
-### 2. Configure Environment
-
-Copy the example environment file and add your Replicate API token:
-
+2. **Configure Environment**
 ```bash
 cp .env.example .env
+# Edit .env and add your REPLICATE_API_TOKEN
 ```
 
-Edit `.env` and add your Replicate API token:
-
-```env
-REPLICATE_API_TOKEN=r8_your_token_here
-```
-
-### 3. Build and Run
-
+3. **Build and Run**
 ```bash
 bun run build
 bun run start
@@ -124,7 +133,7 @@ This server follows the principle: **"Simple enough to understand in 30 minutes,
 
 ## 🔗 MCP Integration
 
-### Claude Desktop
+### Claude Desktop (npx/bunx method - Recommended)
 
 Add to your Claude Desktop MCP configuration:
 
@@ -132,8 +141,8 @@ Add to your Claude Desktop MCP configuration:
 {
   "mcpServers": {
     "flux-replicate": {
-      "command": "bun",
-      "args": ["run", "/path/to/flux-replicate-mcp-server/dist/index.js"],
+      "command": "npx",
+      "args": ["flux-replicate-mcp-server"],
       "env": {
         "REPLICATE_API_TOKEN": "your_token_here"
       }
@@ -141,6 +150,8 @@ Add to your Claude Desktop MCP configuration:
   }
 }
 ```
+
+📖 **[Complete Integration Guide →](INSTALLATION.md)**
 
 ## 🚨 Error Handling
 
@@ -151,6 +162,21 @@ The server uses simple error codes:
 - `PROCESSING`: Image processing failures
 
 All errors are logged as structured JSON to stderr for MCP compatibility.
+
+## 📦 Publication
+
+This package is published to npm and can be used globally:
+
+```bash
+# Install globally
+npm install -g flux-replicate-mcp-server
+
+# Or use directly with npx
+npx flux-replicate-mcp-server
+
+# Or use with bunx
+bunx flux-replicate-mcp-server
+```
 
 ## 📝 Development
 
@@ -164,9 +190,30 @@ bun run build
 bun run dev
 ```
 
+### Publish to npm
+```bash
+# Build and publish
+bun run build
+npm publish
+```
+
 ## 📄 License
 
 MIT
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📞 Support
+
+- 📖 [Installation Guide](INSTALLATION.md)
+- 🐛 [Report Issues](https://github.com/yourusername/flux-replicate-mcp-server/issues)
+- 💬 [Discussions](https://github.com/yourusername/flux-replicate-mcp-server/discussions)
 
 ---
 
