@@ -10,8 +10,10 @@ import { apiError, validationError } from './errors.js';
  * Supported Flux models
  */
 export const FLUX_MODELS = {
+  'flux-1.1-pro': 'black-forest-labs/flux-1.1-pro',
   'flux-pro': 'black-forest-labs/flux-pro',
   'flux-schnell': 'black-forest-labs/flux-schnell',
+  'flux-ultra': 'black-forest-labs/flux-ultra',
 } as const;
 
 export type FluxModel = keyof typeof FLUX_MODELS;

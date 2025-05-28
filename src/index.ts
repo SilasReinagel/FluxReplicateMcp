@@ -11,7 +11,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { ReplicateClient } from './replicate.js';
 import { ImageProcessor } from './image.js';
 import { TempManager } from './temp.js';
-import { getConfig, ensureWorkingDirectory } from './config.js';
+import { getConfig, ensureWorkingDirectory, calculateCost } from './config.js';
 import { validationError, processingError, McpError } from './errors.js';
 import { info, error } from './log.js';
 import { join, isAbsolute, basename, dirname } from 'path';
@@ -67,8 +67,8 @@ class FluxMcpServer {
                 },
                 model: {
                   type: 'string',
-                  enum: ['flux-pro', 'flux-schnell'],
-                  description: 'Flux model to use (default: flux-pro)',
+                  enum: ['flux-1.1-pro', 'flux-pro', 'flux-schnell', 'flux-ultra'],
+                  description: 'Flux model to use (default: flux-1.1-pro)',
                 },
                 output_directory: {
                   type: 'string',
@@ -258,18 +258,23 @@ class FluxMcpServer {
         height: args.height,
       });
 
+      // Calculate cost
+      const cost = calculateCost(model);
+
       info('Image generation completed', {
         outputPath: processResult.outputPath,
         fileSize: processResult.fileSize,
         dimensions: `${processResult.width}x${processResult.height}`,
         processingTime: result.processingTime,
+        model,
+        cost: `$${cost.toFixed(3)}`,
       });
 
       return {
         content: [
           {
             type: 'text',
-            text: `Image generated successfully!\n\nOutput: ${processResult.outputPath}\nDimensions: ${processResult.width}x${processResult.height}\nFile size: ${Math.round(processResult.fileSize / 1024)}KB\nProcessing time: ${result.processingTime}ms\nWorking Directory: ${this.workingDirectory}`,
+            text: `Image generated successfully!\n\nOutput: ${processResult.outputPath}\nModel: ${model}\nDimensions: ${processResult.width}x${processResult.height}\nFile size: ${Math.round(processResult.fileSize / 1024)}KB\nProcessing time: ${result.processingTime}ms\nCost: $${cost.toFixed(3)}\nWorking Directory: ${this.workingDirectory}`,
           },
         ],
       };
