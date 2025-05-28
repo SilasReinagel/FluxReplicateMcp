@@ -345,7 +345,7 @@ const main = async (): Promise<void> => {
 };
 
 // Start the server
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` || (process.argv[1] && process.argv[1].endsWith('flux-replicate-mcp'))) {
   main().catch((err) => {
     error('Server crashed', { error: err instanceof Error ? err.message : 'Unknown error' });
     process.exit(1);
