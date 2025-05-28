@@ -1,10 +1,11 @@
 {
-  "name": "flux-replicate-mcp",
+  "name": "flux-replicate-mcp-server",
   "version": "0.1.0",
   "description": "Simple MCP server for generating images using Flux Pro and Flux Schnell models via Replicate API",
   "main": "dist/index.js",
   "bin": {
-    "flux-replicate-mcp": "dist/index.js"
+    "flux-replicate-mcp": "dist/index.js",
+    "flux-replicate-mcp-server": "dist/index.js"
   },
   "type": "module",
   "scripts": {
@@ -17,6 +18,10 @@
     "mcp",
     "model-context-protocol",
     "flux",
+    "flux-1.1-pro",
+    "flux-pro",
+    "flux-schnell",
+    "flux-ultra",
     "replicate",
     "image-generation",
     "ai",
