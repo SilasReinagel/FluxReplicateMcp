@@ -1,15 +1,15 @@
 # Flux Replicate MCP Server
 
-A **simple** Model Context Protocol (MCP) server for generating images using Flux Pro and Flux Schnell models via the Replicate API.
+A **simple** Model Context Protocol (MCP) server for generating images using Flux models via the Replicate API.
 
 ## ✨ Simplicity First
 
 This server has been designed with simplicity as the primary goal:
-- **751 lines of code** (down from 3,200+ LOC)
-- **7 files** (down from 15+ files)
-- **Environment variable configuration** (no complex config files)
-- **Platform-specific working directories** (automatically organized)
-- **Essential functionality only** (image generation that just works)
+- **Minimal setup** - Just add your API key and start generating images
+- **Zero configuration** - Works out of the box with sensible defaults
+- **Platform-aware** - Automatically organizes your images in the right place
+- **Essential features only** - Image generation that just works, without complexity
+- **Easy integration** - Drop into any MCP client with a single command
 
 ## 🚀 Quick Start
 
@@ -22,11 +22,39 @@ The easiest way to get started is with `npx` or `bunx` - no installation require
 export REPLICATE_API_TOKEN="r8_your_token_here"
 
 # Run with npx (Node.js)
-npx flux-replicate-mcp-server
+npx flux-replicate-mcp
 
 # OR run with bunx (Bun)
-bunx flux-replicate-mcp-server
+bunx flux-replicate-mcp
 ```
+
+### CLI Arguments
+
+The server supports comprehensive CLI configuration:
+
+```bash
+# Basic usage with API key
+flux-replicate-mcp --api-key r8_your_token_here
+
+# Full configuration example
+flux-replicate-mcp \
+  --api-key r8_your_token_here \
+  --model flux-1.1-pro \
+  --format jpg \
+  --quality 95 \
+  --working-directory ~/MyImages
+
+# Get help
+flux-replicate-mcp --help
+```
+
+**Available CLI Arguments:**
+- `--api-key/-k/--replicate-api-key`: Replicate API token (required)
+- `--model/-m`: Default model (`flux-1.1-pro`, `flux-pro`, `flux-schnell`, `flux-ultra`)
+- `--format/-f`: Output format (`jpg`, `png`, `webp`)
+- `--quality/-q`: Quality setting (1-100)
+- `--working-directory/-d/--dir`: Custom working directory
+- `--help/-h`: Show help message
 
 📖 **[Complete Installation Guide →](INSTALLATION.md)**
 
@@ -56,48 +84,50 @@ The server will automatically create a platform-specific working directory for y
 
 ## 🔧 Configuration
 
-All configuration is done via environment variables:
+All configuration is done via environment variables or CLI arguments:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `REPLICATE_API_TOKEN` | ✅ | - | Your Replicate API token |
-| `FLUX_DEFAULT_MODEL` | ❌ | `flux-pro` | Default model (`flux-pro` or `flux-schnell`) |
-| `FLUX_OUTPUT_FORMAT` | ❌ | `jpg` | Default output format (`jpg`, `png`, `webp`) |
-| `FLUX_OUTPUT_QUALITY` | ❌ | `80` | Default quality for lossy formats (1-100) |
-| `FLUX_WORKING_DIRECTORY` | ❌ | Platform-specific | Custom working directory for generated images |
+| Variable | CLI Argument | Required | Default | Description |
+|----------|--------------|----------|---------|-------------|
+| `REPLICATE_API_TOKEN` | `--api-key` | ✅ | - | Your Replicate API token |
+| `FLUX_DEFAULT_MODEL` | `--model` | ❌ | `flux-1.1-pro` | Default model |
+| `FLUX_OUTPUT_FORMAT` | `--format` | ❌ | `jpg` | Default output format |
+| `FLUX_OUTPUT_QUALITY` | `--quality` | ❌ | `80` | Default quality for lossy formats (1-100) |
+| `FLUX_WORKING_DIRECTORY` | `--working-directory` | ❌ | Platform-specific | Custom working directory |
+
+## 🎨 Supported Models
+
+| Model | Cost per Image | Speed | Quality | Best For |
+|-------|----------------|-------|---------|----------|
+| `flux-1.1-pro` | $0.040 | Medium | Highest | Professional work, detailed images |
+| `flux-pro` | $0.040 | Medium | High | General purpose, balanced quality |
+| `flux-schnell` | $0.003 | Fast | Good | Quick iterations, testing |
+| `flux-ultra` | $0.060 | Slow | Ultra High | Premium quality, final outputs |
 
 ## 🛠️ Available Tools
 
 ### `generate_image`
 
-Generate images using Flux models.
+Generate images using Flux models with cost tracking.
 
 **Parameters:**
 - `prompt` (required): Text description of the image to generate
-- `output_directory` (optional): Output directory relative to working directory (defaults to working directory root)
+- `output_directory` (optional): Output directory relative to working directory
 - `filename` (optional): Output filename with extension (auto-generated if not provided)
-- `output_path` (optional): Complete output path (alternative to output_directory + filename). If provided, takes precedence over output_directory and filename.
-- `model` (optional): Flux model to use (`flux-pro` or `flux-schnell`)
+- `output_path` (optional): Complete output path (legacy support)
+- `model` (optional): Flux model to use
 - `width` (optional): Image width in pixels (default: 1024)
 - `height` (optional): Image height in pixels (default: 1024)
 - `quality` (optional): Image quality for lossy formats (1-100)
 
 **Examples:**
 
-**Auto-generated filename:**
+**Auto-generated filename with cost tracking:**
 ```json
 {
   "prompt": "A serene mountain landscape at sunset"
 }
 ```
-
-**Custom filename:**
-```json
-{
-  "prompt": "A serene mountain landscape at sunset",
-  "filename": "mountain_sunset.jpg"
-}
-```
+*Response includes: file path, generation time, model used, and cost ($0.040 for flux-1.1-pro)*
 
 **Custom directory and filename:**
 ```json
@@ -112,61 +142,39 @@ Generate images using Flux models.
 }
 ```
 
-**Using output_path (legacy):**
+**Fast iteration with flux-schnell:**
 ```json
 {
-  "prompt": "A serene mountain landscape at sunset",
-  "output_path": "landscapes/mountain_sunset.jpg",
-  "model": "flux-pro",
-  "width": 1024,
-  "height": 1024,
-  "quality": 90
+  "prompt": "Quick concept art of a robot",
+  "model": "flux-schnell",
+  "filename": "robot_concept.jpg"
 }
 ```
+*Only $0.003 per image - perfect for rapid prototyping*
 
 **Output Organization:**
 - **Auto-generated**: Files saved with descriptive names based on prompt and timestamp
 - **Custom directory**: `output_directory` creates subdirectories within working directory
 - **Absolute paths**: Converted to working directory for security
 - **Directory creation**: Output directories are automatically created if they don't exist
-
-## 📁 Architecture
-
-The simplified codebase consists of just 7 focused files:
-
-```
-src/
-├── index.ts           # MCP server (290+ LOC)
-├── replicate.ts       # Replicate API client (170+ LOC)
-├── image.ts           # Image processing with Sharp (124 LOC)
-├── temp.ts            # Basic temp file management (73 LOC)
-├── errors.ts          # Simple error handling (58 LOC)
-├── config.ts          # Environment-based config (80+ LOC)
-└── log.ts             # Basic JSON logging (38 LOC)
-```
+- **Cost tracking**: Every generation shows the cost and model used
 
 ## 🎯 Design Philosophy
 
 This server follows the principle: **"Simple enough to understand in 30 minutes, powerful enough to generate great images"**
 
-### What We Kept
-- ✅ Core image generation with Flux Pro/Schnell
+### What's Included
+- ✅ Core image generation with Core Flux models
 - ✅ Image processing and format conversion
 - ✅ Platform-specific working directories
+- ✅ CLI argument support with comprehensive help
+- ✅ Cost tracking for budget awareness
 - ✅ Basic error handling and logging
 - ✅ MCP protocol compliance
 
-### What We Removed
-- ❌ Complex configuration management
-- ❌ Extensive validation and retry logic
-- ❌ Performance tracking and cost analysis
-- ❌ File-based configuration and migrations
-- ❌ Comprehensive test suites
-- ❌ Setup wizards and health checks
-
 ## 🔗 MCP Integration
 
-### Claude Desktop (npx/bunx method - Recommended)
+### Claude Desktop (Recommended)
 
 Add to your Claude Desktop MCP configuration:
 
@@ -175,7 +183,7 @@ Add to your Claude Desktop MCP configuration:
   "mcpServers": {
     "flux-replicate": {
       "command": "npx",
-      "args": ["flux-replicate-mcp-server"],
+      "args": ["flux-replicate-mcp"],
       "env": {
         "REPLICATE_API_TOKEN": "your_token_here"
       }
@@ -184,32 +192,76 @@ Add to your Claude Desktop MCP configuration:
 }
 ```
 
+### Cursor Integration
+
+#### Method 1: Using mcp.json
+
+Create or edit `.cursor/mcp.json` in your project directory:
+
+```json
+{
+  "mcpServers": {
+    "flux-replicate": {
+      "command": "env REPLICATE_API_TOKEN=YOUR_TOKEN npx",
+      "args": ["-y", "flux-replicate-mcp"]
+    }
+  }
+}
+```
+
+#### Method 2: Manual Configuration
+
+1. Open Cursor Settings → MCP section
+2. Add server with command: `env REPLICATE_API_TOKEN=YOUR_TOKEN npx -y flux-replicate-mcp`
+3. Restart Cursor
+
+### Other MCP Clients
+
+The server works with any MCP-compatible client:
+- **Cline**: Use the same npx command
+- **Zed**: Add to MCP configuration
+- **Custom clients**: Use the MCP SDK
+
 📖 **[Complete Integration Guide →](INSTALLATION.md)**
 
 ## 🚨 Error Handling
 
-The server uses simple error codes:
+The server uses simple error codes with helpful messages:
 - `AUTH`: Authentication/API key issues
-- `API`: Replicate API errors
+- `API`: Replicate API errors  
 - `VALIDATION`: Invalid input parameters
 - `PROCESSING`: Image processing failures
 
 All errors are logged as structured JSON to stderr for MCP compatibility.
 
-## 📦 Publication
+## 💰 Cost Management
 
-This package is published to npm and can be used globally:
+Track your spending with built-in cost reporting:
+- Each generation shows the exact cost
+- Model pricing clearly displayed
+- Choose models based on budget vs quality needs
+- Use `flux-schnell` for cheap iterations ($0.003)
+- Use `flux-ultra` for premium results ($0.060)
 
+## 📦 Installation & Usage
+
+### Global Installation
 ```bash
 # Install globally
-npm install -g flux-replicate-mcp-server
+npm install -g flux-replicate-mcp
 
 # Or use directly with npx
-npx flux-replicate-mcp-server
+npx flux-replicate-mcp --api-key YOUR_TOKEN
 
 # Or use with bunx
-bunx flux-replicate-mcp-server
+bunx flux-replicate-mcp --api-key YOUR_TOKEN
 ```
+
+### Package Information
+- **Package Name**: `flux-replicate-mcp`
+- **Binaries**: `flux-replicate-mcp`, `flux-replicate-mcp-server`
+- **Dependencies**: 3 runtime dependencies
+- **Size**: ~600KB unpacked
 
 ## 📝 Development
 
@@ -230,10 +282,6 @@ bun run build
 npm publish
 ```
 
-## 📄 License
-
-MIT
-
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -245,9 +293,9 @@ MIT
 ## 📞 Support
 
 - 📖 [Installation Guide](INSTALLATION.md)
-- 🐛 [Report Issues](https://github.com/yourusername/flux-replicate-mcp-server/issues)
-- 💬 [Discussions](https://github.com/yourusername/flux-replicate-mcp-server/discussions)
+- 🐛 [Report Issues](https://github.com/SilasReinagel/flux-replicate-mcp/issues)
+- 📦 [npm Package](https://www.npmjs.com/package/flux-replicate-mcp)
 
----
+## 📄 License
 
-**Note:** This is a simplified version focused on core functionality. For advanced features like retry logic, performance tracking, or complex validation, consider the full-featured version. 
+MIT
