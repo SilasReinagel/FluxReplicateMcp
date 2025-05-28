@@ -21,7 +21,7 @@ export const info = (message: string, context?: Record<string, any>): void => {
     ...(context && { context }),
   };
   
-  console.error(JSON.stringify(entry));
+  console.info(JSON.stringify(entry));
 };
 
 /**

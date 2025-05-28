@@ -74,17 +74,49 @@ Generate images using Flux models.
 
 **Parameters:**
 - `prompt` (required): Text description of the image to generate
-- `output_path` (required): Filename or relative path within working directory (absolute paths converted to working directory)
+- `output_directory` (optional): Output directory relative to working directory (defaults to working directory root)
+- `filename` (optional): Output filename with extension (auto-generated if not provided)
+- `output_path` (optional): Complete output path (alternative to output_directory + filename). If provided, takes precedence over output_directory and filename.
 - `model` (optional): Flux model to use (`flux-pro` or `flux-schnell`)
 - `width` (optional): Image width in pixels (default: 1024)
 - `height` (optional): Image height in pixels (default: 1024)
 - `quality` (optional): Image quality for lossy formats (1-100)
 
-**Example:**
+**Examples:**
+
+**Auto-generated filename:**
+```json
+{
+  "prompt": "A serene mountain landscape at sunset"
+}
+```
+
+**Custom filename:**
 ```json
 {
   "prompt": "A serene mountain landscape at sunset",
-  "output_path": "mountain_sunset.jpg",
+  "filename": "mountain_sunset.jpg"
+}
+```
+
+**Custom directory and filename:**
+```json
+{
+  "prompt": "Professional product photo of a smartphone",
+  "output_directory": "products",
+  "filename": "smartphone.png",
+  "model": "flux-pro",
+  "width": 1024,
+  "height": 1024,
+  "quality": 95
+}
+```
+
+**Using output_path (legacy):**
+```json
+{
+  "prompt": "A serene mountain landscape at sunset",
+  "output_path": "landscapes/mountain_sunset.jpg",
   "model": "flux-pro",
   "width": 1024,
   "height": 1024,
@@ -92,10 +124,11 @@ Generate images using Flux models.
 }
 ```
 
-**Working Directory Behavior:**
-- `"image.jpg"` → Saved to working directory as `image.jpg`
-- `"subfolder/image.jpg"` → Saved to working directory as `subfolder/image.jpg`
-- `"/absolute/path/image.jpg"` → Converted to working directory as `image.jpg`
+**Output Organization:**
+- **Auto-generated**: Files saved with descriptive names based on prompt and timestamp
+- **Custom directory**: `output_directory` creates subdirectories within working directory
+- **Absolute paths**: Converted to working directory for security
+- **Directory creation**: Output directories are automatically created if they don't exist
 
 ## 📁 Architecture
 

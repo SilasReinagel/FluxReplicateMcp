@@ -14,7 +14,8 @@ import { TempManager } from './temp.js';
 import { getConfig, ensureWorkingDirectory } from './config.js';
 import { validationError, processingError, McpError } from './errors.js';
 import { info, error } from './log.js';
-import { join, isAbsolute, basename } from 'path';
+import { join, isAbsolute, basename, dirname } from 'path';
+import { promises as fs } from 'fs';
 
 /**
  * Simple MCP Server for Flux image generation
@@ -69,9 +70,17 @@ class FluxMcpServer {
                   enum: ['flux-pro', 'flux-schnell'],
                   description: 'Flux model to use (default: flux-pro)',
                 },
+                output_directory: {
+                  type: 'string',
+                  description: 'Output directory relative to working directory (optional, defaults to working directory root)',
+                },
+                filename: {
+                  type: 'string',
+                  description: 'Output filename with extension (optional, auto-generated if not provided)',
+                },
                 output_path: {
                   type: 'string',
-                  description: 'Filename or relative path within the working directory (absolute paths will be converted to working directory)',
+                  description: 'Complete output path (alternative to output_directory + filename). If provided, takes precedence over output_directory and filename.',
                 },
                 width: {
                   type: 'number',
@@ -88,7 +97,7 @@ class FluxMcpServer {
                   description: 'Image quality for lossy formats (default: 80)',
                 },
               },
-              required: ['prompt', 'output_path'],
+              required: ['prompt'],
             },
           },
         ],
@@ -123,17 +132,45 @@ class FluxMcpServer {
   };
 
   /**
+   * Generate a filename based on prompt and timestamp
+   */
+  private generateFilename = (prompt: string, format: string): string => {
+    // Clean prompt for filename (remove special characters, limit length)
+    const cleanPrompt = prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 50);
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    return `${cleanPrompt}_${timestamp}.${format}`;
+  };
+
+  /**
    * Resolve output path to working directory
    */
-  private resolveOutputPath = (userPath: string): string => {
-    // If it's an absolute path, extract just the filename and put it in working directory
-    if (isAbsolute(userPath)) {
-      const filename = basename(userPath);
-      return join(this.workingDirectory, filename);
+  private resolveOutputPath = (outputDirectory: string | undefined, filename: string | undefined, outputPath: string | undefined, prompt: string, defaultFormat: string): string => {
+    // If output_path is provided, use it (legacy support)
+    if (outputPath) {
+      // If it's an absolute path, extract just the filename and put it in working directory
+      if (isAbsolute(outputPath)) {
+        const filename = basename(outputPath);
+        return join(this.workingDirectory, filename);
+      }
+      // If it's a relative path, join it with working directory
+      return join(this.workingDirectory, outputPath);
     }
+
+    // Use output_directory and filename
+    const directory = outputDirectory || '';
+    const file = filename || this.generateFilename(prompt, defaultFormat);
     
-    // If it's a relative path, join it with working directory
-    return join(this.workingDirectory, userPath);
+    // Ensure directory is relative to working directory
+    const resolvedDirectory = isAbsolute(directory) 
+      ? this.workingDirectory 
+      : join(this.workingDirectory, directory);
+    
+    return join(resolvedDirectory, file);
   };
 
   /**
@@ -145,14 +182,22 @@ class FluxMcpServer {
       throw validationError('Prompt is required and must be a non-empty string');
     }
 
-    if (!args.output_path || typeof args.output_path !== 'string') {
-      throw validationError('Output path is required and must be a valid file path');
+    // Validate that we have some way to determine output path
+    if (!args.output_path && !args.filename && !args.output_directory) {
+      // We'll auto-generate filename, so this is OK
     }
 
     const prompt = args.prompt.trim();
-    const userOutputPath = args.output_path;
-    const resolvedOutputPath = this.resolveOutputPath(userOutputPath);
     const config = getConfig();
+    
+    // Resolve output path using new logic
+    const resolvedOutputPath = this.resolveOutputPath(
+      args.output_directory, 
+      args.filename, 
+      args.output_path, 
+      prompt,
+      config.outputFormat
+    );
     
     // Ensure we have a valid model string
     const modelParam: string = args.model || config.defaultModel;
@@ -171,7 +216,9 @@ class FluxMcpServer {
     info('Starting image generation', { 
       prompt, 
       model, 
-      userOutputPath, 
+      outputDirectory: args.output_directory,
+      filename: args.filename,
+      outputPath: args.output_path,
       resolvedOutputPath, 
       workingDirectory: this.workingDirectory,
       width, 
@@ -198,6 +245,10 @@ class FluxMcpServer {
       }
       
       const imageBuffer = await this.replicateClient.downloadImage(imageUrl);
+
+      // Ensure output directory exists
+      const outputDir = dirname(resolvedOutputPath);
+      await fs.mkdir(outputDir, { recursive: true });
 
       // Process and save the image
       const processResult = await this.imageProcessor.processImage(imageBuffer, {

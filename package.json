@@ -1,5 +1,5 @@
 {
-  "name": "flux-replicate-mcp-server",
+  "name": "flux-replicate-mcp",
   "version": "0.1.0",
   "description": "Simple MCP server for generating images using Flux Pro and Flux Schnell models via Replicate API",
   "main": "dist/index.js",
@@ -25,7 +25,7 @@
     "typescript",
     "bun"
   ],
-  "author": "Silas Reinagel <silas.reinagel@gmail.com>",
+  "author": "Silas Reinagel (https://github.com/SilasReinagel)",
   "license": "MIT",
   "repository": {
     "type": "git",

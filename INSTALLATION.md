@@ -126,23 +126,39 @@ The server automatically creates platform-specific working directories:
 
 ## 🛠️ Usage Examples
 
-### Basic Image Generation
+### Auto-generated Filename
 ```json
 {
-  "prompt": "A beautiful sunset over mountains",
-  "output_path": "sunset.jpg"
+  "prompt": "A beautiful sunset over mountains"
 }
 ```
 
-### Advanced Options
+### Custom Filename
+```json
+{
+  "prompt": "A beautiful sunset over mountains",
+  "filename": "sunset.jpg"
+}
+```
+
+### Organized in Subdirectories
 ```json
 {
   "prompt": "Professional product photo of a smartphone",
-  "output_path": "products/smartphone.png",
+  "output_directory": "products",
+  "filename": "smartphone.png",
   "model": "flux-pro",
   "width": 1024,
   "height": 1024,
   "quality": 95
+}
+```
+
+### Legacy Output Path (still supported)
+```json
+{
+  "prompt": "A beautiful sunset over mountains",
+  "output_path": "landscapes/sunset.jpg"
 }
 ```
 
