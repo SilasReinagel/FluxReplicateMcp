@@ -111,13 +111,11 @@ Generate images using Flux models with cost tracking.
 
 **Parameters:**
 - `prompt` (required): Text description of the image to generate
-- `output_directory` (optional): Output directory relative to working directory
-- `filename` (optional): Output filename with extension (auto-generated if not provided)
-- `output_path` (optional): Complete output path (legacy support)
-- `model` (optional): Flux model to use
+- `output_path` (optional): Absolute file path for the generated image. If not provided, auto-generated filename will be used in server working directory.
+- `model` (optional): Flux model to use (default: `flux-1.1-pro`)
 - `width` (optional): Image width in pixels (default: 1024)
-- `height` (optional): Image height in pixels (default: 1024)
-- `quality` (optional): Image quality for lossy formats (1-100)
+- `height` (optional): Image height in pixels (default: 768)
+- `quality` (optional): Image quality for lossy formats (1-100, default: 80)
 
 **Examples:**
 
@@ -129,12 +127,11 @@ Generate images using Flux models with cost tracking.
 ```
 *Response includes: file path, generation time, model used, and cost ($0.040 for flux-1.1-pro)*
 
-**Custom directory and filename:**
+**Custom absolute path:**
 ```json
 {
   "prompt": "Professional product photo of a smartphone",
-  "output_directory": "products",
-  "filename": "smartphone.png",
+  "output_path": "/absolute/path/to/smartphone.png",
   "model": "flux-pro",
   "width": 1024,
   "height": 1024,
@@ -147,15 +144,15 @@ Generate images using Flux models with cost tracking.
 {
   "prompt": "Quick concept art of a robot",
   "model": "flux-schnell",
-  "filename": "robot_concept.jpg"
+  "output_path": "/home/user/images/robot_concept.jpg"
 }
 ```
 *Only $0.003 per image - perfect for rapid prototyping*
 
 **Output Organization:**
-- **Auto-generated**: Files saved with descriptive names based on prompt and timestamp
-- **Custom directory**: `output_directory` creates subdirectories within working directory
-- **Absolute paths**: Converted to working directory for security
+- **Auto-generated**: Files saved with descriptive names based on prompt and timestamp in server working directory
+- **Custom path**: `output_path` must be an absolute path for the generated image
+- **Path validation**: Relative paths are rejected to ensure compatibility across client/server environments
 - **Directory creation**: Output directories are automatically created if they don't exist
 - **Cost tracking**: Every generation shows the cost and model used
 

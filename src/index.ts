@@ -70,17 +70,9 @@ class FluxMcpServer {
                   enum: ['flux-1.1-pro', 'flux-pro', 'flux-schnell', 'flux-ultra'],
                   description: 'Flux model to use (default: flux-1.1-pro)',
                 },
-                output_directory: {
-                  type: 'string',
-                  description: 'Output directory relative to working directory (optional, defaults to working directory root)',
-                },
-                filename: {
-                  type: 'string',
-                  description: 'Output filename with extension (optional, auto-generated if not provided)',
-                },
                 output_path: {
                   type: 'string',
-                  description: 'Complete output path (alternative to output_directory + filename). If provided, takes precedence over output_directory and filename.',
+                  description: 'Output file path (optional). Must be an absolute path if provided. If not provided, auto-generated filename will be used in server working directory.',
                 },
                 width: {
                   type: 'number',
@@ -88,7 +80,7 @@ class FluxMcpServer {
                 },
                 height: {
                   type: 'number',
-                  description: 'Image height in pixels (default: 1024)',
+                  description: 'Image height in pixels (default: 768)',
                 },
                 quality: {
                   type: 'number',
@@ -149,28 +141,18 @@ class FluxMcpServer {
   /**
    * Resolve output path to working directory
    */
-  private resolveOutputPath = (outputDirectory: string | undefined, filename: string | undefined, outputPath: string | undefined, prompt: string, defaultFormat: string): string => {
-    // If output_path is provided, use it (legacy support)
+  private resolveOutputPath = (outputPath: string | undefined, prompt: string, defaultFormat: string): string => {
+    // If output_path is provided, it must be an absolute path
     if (outputPath) {
-      // If it's an absolute path, extract just the filename and put it in working directory
-      if (isAbsolute(outputPath)) {
-        const filename = basename(outputPath);
-        return join(this.workingDirectory, filename);
+      if (!isAbsolute(outputPath)) {
+        throw validationError('output_path must be an absolute path. Relative paths are not supported because the client and server may run in different environments.');
       }
-      // If it's a relative path, join it with working directory
-      return join(this.workingDirectory, outputPath);
+      return outputPath;
     }
 
-    // Use output_directory and filename
-    const directory = outputDirectory || '';
-    const file = filename || this.generateFilename(prompt, defaultFormat);
-    
-    // Ensure directory is relative to working directory
-    const resolvedDirectory = isAbsolute(directory) 
-      ? this.workingDirectory 
-      : join(this.workingDirectory, directory);
-    
-    return join(resolvedDirectory, file);
+    // Auto-generate filename in working directory
+    const filename = this.generateFilename(prompt, defaultFormat);
+    return join(this.workingDirectory, filename);
   };
 
   /**
@@ -182,18 +164,11 @@ class FluxMcpServer {
       throw validationError('Prompt is required and must be a non-empty string');
     }
 
-    // Validate that we have some way to determine output path
-    if (!args.output_path && !args.filename && !args.output_directory) {
-      // We'll auto-generate filename, so this is OK
-    }
-
     const prompt = args.prompt.trim();
     const config = getConfig();
     
-    // Resolve output path using new logic
+    // Resolve output path using simplified logic
     const resolvedOutputPath = this.resolveOutputPath(
-      args.output_directory, 
-      args.filename, 
       args.output_path, 
       prompt,
       config.outputFormat
@@ -202,7 +177,7 @@ class FluxMcpServer {
     // Ensure we have a valid model string
     const modelParam: string = args.model || config.defaultModel;
     const width = args.width || 1024;
-    const height = args.height || 1024;
+    const height = args.height || 768;
     const quality = args.quality || config.outputQuality;
 
     // Validate and ensure model is supported
@@ -216,8 +191,6 @@ class FluxMcpServer {
     info('Starting image generation', { 
       prompt, 
       model, 
-      outputDirectory: args.output_directory,
-      filename: args.filename,
       outputPath: args.output_path,
       resolvedOutputPath, 
       workingDirectory: this.workingDirectory,
@@ -250,12 +223,12 @@ class FluxMcpServer {
       const outputDir = dirname(resolvedOutputPath);
       await fs.mkdir(outputDir, { recursive: true });
 
-      // Process and save the image
+      // Process and save the image - use resolved width/height, not args
       const processResult = await this.imageProcessor.processImage(imageBuffer, {
         outputPath: resolvedOutputPath,
         quality,
-        width: args.width,
-        height: args.height,
+        width,
+        height,
       });
 
       // Calculate cost
@@ -345,9 +318,7 @@ const main = async (): Promise<void> => {
 };
 
 // Start the server
-if (import.meta.url === `file://${process.argv[1]}` || (process.argv[1] && process.argv[1].endsWith('flux-replicate-mcp'))) {
-  main().catch((err) => {
-    error('Server crashed', { error: err instanceof Error ? err.message : 'Unknown error' });
-    process.exit(1);
-  });
-} 
+main().catch((err) => {
+  error('Server crashed', { error: err instanceof Error ? err.message : 'Unknown error' });
+  process.exit(1);
+}); 

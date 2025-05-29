@@ -33,6 +33,39 @@ export interface GenerateImageParams {
 }
 
 /**
+ * Convert width/height to aspect ratio string
+ */
+const getAspectRatio = (width: number, height: number): string => {
+  // Common aspect ratios that Flux supports
+  const ratio = width / height;
+  
+  if (Math.abs(ratio - 1) < 0.01) return "1:1";           // Square
+  if (Math.abs(ratio - 4/3) < 0.01) return "4:3";        // Standard
+  if (Math.abs(ratio - 3/4) < 0.01) return "3:4";        // Portrait standard
+  if (Math.abs(ratio - 16/9) < 0.01) return "16:9";      // Widescreen
+  if (Math.abs(ratio - 9/16) < 0.01) return "9:16";      // Portrait widescreen
+  if (Math.abs(ratio - 21/9) < 0.01) return "21:9";      // Ultra-wide
+  if (Math.abs(ratio - 9/21) < 0.01) return "9:21";      // Ultra-tall
+  if (Math.abs(ratio - 2/3) < 0.01) return "2:3";        // Portrait
+  if (Math.abs(ratio - 3/2) < 0.01) return "3:2";        // Landscape
+  
+  // If no exact match, find the closest standard ratio
+  if (ratio > 1) {
+    // Landscape - choose between 4:3, 3:2, 16:9, 21:9
+    if (ratio < 1.4) return "4:3";
+    if (ratio < 1.6) return "3:2";
+    if (ratio < 2.1) return "16:9";
+    return "21:9";
+  } else {
+    // Portrait - choose between 3:4, 2:3, 9:16, 9:21
+    if (ratio > 0.8) return "3:4";
+    if (ratio > 0.65) return "2:3";
+    if (ratio > 0.5) return "9:16";
+    return "9:21";
+  }
+};
+
+/**
  * Image generation result
  */
 export interface GenerateImageResult {
@@ -73,11 +106,15 @@ export class ReplicateClient {
     }
 
     try {
-      // Prepare base input parameters
+      // Convert width/height to aspect ratio
+      const width = params.width || 1024;
+      const height = params.height || 768;
+      const aspectRatio = getAspectRatio(width, height);
+
+      // Prepare base input parameters using aspect_ratio instead of width/height
       const baseInput = {
         prompt: params.prompt.trim(),
-        width: params.width || 1024,
-        height: params.height || 1024,
+        aspect_ratio: aspectRatio,
         num_outputs: params.num_outputs || 1,
         ...(params.seed && { seed: params.seed }),
       };
